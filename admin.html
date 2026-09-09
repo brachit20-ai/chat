@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>מרכז שליטה ומנהל - Supabase</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --panel: #141824;
+      --main-cyan: #00f2ff;
+      --gold: #ffd700;
+      --danger: #ff3355;
+      --success: #00ff88;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, monospace, sans-serif; }
+
+    body {
+      background: var(--bg);
+      color: #fff;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .admin-container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      box-shadow: 0 0 20px rgba(0, 242, 255, 0.05);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #222;
+      padding-bottom: 15px;
+    }
+
+    .status-badge {
+      color: var(--success);
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td { padding: 12px; text-align: center; border-bottom: 1px solid #222; font-size: 0.9rem; }
+    th { background: rgba(0,242,255,0.08); color: var(--main-cyan); }
+
+    .actions-grid { display: flex; gap: 6px; justify-content: center; }
+    .action-btn { padding: 6px 10px; font-size: 0.75rem; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; }
+
+    .btn-gold { background: linear-gradient(90deg, var(--gold), #b8860b); color: #000; }
+    .btn-danger { background: var(--danger); color: #fff; }
+
+    .action-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+
+    #msg-log {
+      max-height: 250px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.4);
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #222;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .log-item { background: #1a1d26; padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+
+<div class="admin-container">
+  <div class="header">
+    <h2>🛡️ מרכז שליטה וניהול משתמשים (Supabase)</h2>
+    <div class="status-badge"><span class="dot"></span> מחובר כ-Admin</div>
+  </div>
+
+  <h3>משתמשים רשומים/מחוברים</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>מזהה משתמש</th>
+        <th>שם תצוגה</th>
+        <th>פעולות מהירות</th>
+      </tr>
+    </thead>
+    <tbody id="users-table-body">
+      <tr><td colspan="3" style="color:#666;">טוען משתמשים...</td></tr>
+    </tbody>
+  </table>
+
+  <h3>לוג הודעות שנשלחו בצ'אט</h3>
+  <div id="msg-log">טוען הודעות...</div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://hvnfohlcvhjppoiejtvm.supabase.com';
+  const SUPABASE_ANON_KEY = 'sb_publishable_B_KXyHYgS8Tsb0L-bm6sEw_nOyzzGyv';
+  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  async function loadUsers() {
+    const { data: users, error } = await supabase.from('users').select('*');
+    const tbody = document.getElementById('users-table-body');
+    tbody.innerHTML = '';
+
+    if (error || !users || users.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" style="color:#666;">אין משתמשים מחוברים.</td></tr>';
+      return;
+    }
+
+    users.forEach(user => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:var(--main-cyan); font-weight:bold;">${user.id}</td>
+        <td>${user.name}</td>
+        <td>
+          <div class="actions-grid">
+            <button class="action-btn btn-danger" onclick="deleteUser('${user.id}')">מחק משתמש</button>
+            <button class="action-btn btn-gold" onclick="sendAdminNotice('${user.name}')">שלח הודעה ✨</button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function loadMessages() {
+    const { data: msgs } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
+    const log = document.getElementById('msg-log');
+    log.innerHTML = '';
+
+    if (!msgs || msgs.length === 0) {
+      log.innerHTML = '<p style="color:#666;">אין הודעות במערכת.</p>';
+      return;
+    }
+
+    msgs.forEach(msg => {
+      const div = document.createElement('div');
+      div.className = 'log-item';
+      div.innerHTML = `<b style="color:var(--main-cyan);">${msg.sender}:</b> ${msg.text || '[תמונה]'}`;
+      log.appendChild(div);
+    });
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function deleteUser(userId) {
+    await supabase.from('users').delete().eq('id', userId);
+    loadUsers();
+  }
+
+  async function sendAdminNotice(userName) {
+    const txt = prompt(`הכנס הודעה עבור ${userName}:`);
+    if (!txt) return;
+
+    await supabase.from('messages').insert([
+      { sender: '👑 מנהל', text: txt, is_system: true }
+    ]);
+  }
+
+  // האזנה בזמן אמת לשינויים ב-Supabase
+  supabase.channel('admin-updates')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => loadMessages())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => loadUsers())
+    .subscribe();
+
+  loadUsers();
+  loadMessages();
+</script>
+</body>
+</html>
