@@ -464,4 +464,84 @@
   }
 </script>
 </body>
+  <!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>הצ'אט שלי</title>
+  <!-- טעינת ספריית Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- 1. כאן נמצא האזור הוויזואלי (התיבות והכפתורים של הצ'אט) -->
+  <div id="chat-container">
+    <div id="messages-box"></div>
+    <input type="text" id="message-input" placeholder="הקלד הודעה...">
+    <button onclick="handleSend()">שלח</button>
+  </div>
+
+
+  <!-- 2. כאן למטה מגדירים את ה-JavaScript -->
+  <script>
+    // חיבור ל-Supabase
+    const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+    const SUPABASE_KEY = 'YOUR_ANON_KEY';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // א) שליחת הודעה למשתמש מסוים (recipient_id)
+    async function sendMessage(text, targetUserId) {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return alert('יש להתחבר תחילה');
+
+      const { error } = await supabase
+        .from('messages')
+        .insert([
+          {
+            text: text,
+            user_id: user.id,          // השולח (אני)
+            recipient_id: targetUserId // המקבל (החבר)
+          }
+        ]);
+
+      if (error) console.error('שגיאה בשליחה:', error);
+    }
+
+    // ב) טעינת השיחה הפרטית בין שני המשתמשים
+    async function loadChatWithUser(targetUserId) {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return;
+
+      const { data: messages, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(user_id.eq.${user.id},recipient_id.eq.${targetUserId}),and(user_id.eq.${targetUserId},recipient_id.eq.${user.id})`)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('שגיאה שטעינה:', error);
+      } else {
+        console.log('ההודעות של השיחה:', messages);
+        // כאן מעדכנים את הודעות הצ'אט במסך
+      }
+    }
+
+    // ג) הפעלת השליחה בלחיצה על הכפתור
+    function handleSend() {
+      const input = document.getElementById('message-input');
+      const text = input.value;
+      
+      // החלף את המחרוזת למטה ב-ID של המשתמש שאיתו אתה מתכתב
+      const friendUserId = '12345678-aaaa-bbbb-cccc-1234567890ab';
+
+      if (text.trim() !== '') {
+        sendMessage(text, friendUserId);
+        input.value = '';
+      }
+    }
+  </script>
+</body>
+</html>
 </html>
